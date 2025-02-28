@@ -1,0 +1,87 @@
+import spacy
+from spacy import load
+from spacy.lang.ru import Russian
+nlp = Russian()
+load_model = load("ru_core_news_sm")
+lemma = []
+for item in load_model.pipe(hotel['text'].values):
+    lemma.append(n.lemma_ for n in item)
+hotel['text'] = lemma
+
+import nltk
+from nltk.corpus import stopwords
+nltk.download('stopwords')
+stop_words = set(stopwords.words('russian'))
+stopwords_ru = stopwords.words("russian")
+hotel['text'] = hotel['text'].apply(lambda x:[item for item in x if item not in stopwords_ru])
+hotel['text'] = [' '.join(map(str, j)) for j in hotel['text']]
+
+import re
+import nltk
+from nltk.corpus import stopwords
+nltk.download('stopwords')
+stop_words = set(stopwords.words('russian'))
+def clean_text(text):
+    if not isinstance(text, str):
+        return ""
+    text = text.lower()
+    text = re.sub(r'\d+', '', text)         # удаляем числа
+    text = re.sub(r'[^\w\s]', '', text)     # удаляем пунктуацию
+    words = text.split()
+    words = [word for word in words if word not in stop_words] # удаляем стоп-слова
+    return " ".join(words)
+hotel['clean_text'] = hotel['text'].apply(clean_text)
+hotel[['text', 'clean_text']]
+
+df = hotel
+df = df.drop(columns='text')
+df
+
+df = df.drop_duplicates(subset='clean_text')
+df
+
+test_df = df
+test_df
+
+from transformers import pipeline
+sentiment_analyzer = pipeline("text-classification", model="blanchefort/rubert-base-cased-sentiment", device=0)
+label = []
+score = []
+x = 0 
+for i in test_df['clean_text']:
+    result = sentiment_analyzer(df['clean_text'].tolist()[x])
+    label.append(result[0]['label'])
+    score.append(result[0]['score'])
+    x += 1
+    print(len(label)," -> ", len(score))
+
+test_df['label'] = label
+test_df['score'] = score
+test_df
+
+# 0: NEUTRAL
+# 1: POSITIVE
+# 2: NEGATIVE
+
+test_df['label'] = test_df['label'].replace("POSITIVE", 1)
+test_df['label'] = test_df['label'].replace("NEUTRAL", 0)
+test_df['label'] = test_df['label'].replace("NEGATIVE", 2)
+print(test_df.info())
+
+from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import TfidfVectorizer
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE       # снижение размерности
+import seaborn as sns
+vectorizer = TfidfVectorizer()
+X = vectorizer.fit_transform(test_df['clean_text'])
+kmeans = KMeans(n_clusters=3, random_state=42)
+clusters = kmeans.fit(X)
+tsne = TSNE(n_components=3,random_state=42)
+X_tsne = tsne.fit_transform(X.toarray())
+plt.figure(figsize=(8,6))
+sns.scatterplot(x=X_tsne[:,0], y=X_tsne[:,1],hue=clusters, palette='viridis')
+plt.show()
+
+
+
